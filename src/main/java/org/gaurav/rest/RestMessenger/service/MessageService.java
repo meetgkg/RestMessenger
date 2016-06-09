@@ -7,6 +7,8 @@ import java.util.List;
 import java.util.Map;
 
 import org.gaurav.rest.RestMessenger.database.DatabaseClass;
+import org.gaurav.rest.RestMessenger.exception.DataNotFoundException;
+import org.gaurav.rest.RestMessenger.exception.IdTooBigException;
 import org.gaurav.rest.RestMessenger.model.Message;
 
 public class MessageService {
@@ -23,7 +25,14 @@ public class MessageService {
 	}
 	
 	public Message getMessage(long id){
-		return messages.get(id);
+		Message message = messages.get(id);
+		if(id > 5000){
+			throw new IdTooBigException("Id : " + id +" is too big !!");
+		}
+		if(message == null){
+			throw new DataNotFoundException("Message with id : " + id +" not found !!");
+		}
+		return message;
 	}
 	
 	public Message addMessage(Message message){

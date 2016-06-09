@@ -1,7 +1,9 @@
 package org.gaurav.rest.RestMessenger.resources;
 
+import java.net.URI;
 import java.util.List;
 
+import javax.ws.rs.BeanParam;
 import javax.ws.rs.Consumes;
 import javax.ws.rs.DELETE;
 import javax.ws.rs.GET;
@@ -10,35 +12,69 @@ import javax.ws.rs.PUT;
 import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
-import javax.ws.rs.QueryParam;
+import javax.ws.rs.core.Context;
 import javax.ws.rs.core.MediaType;
+import javax.ws.rs.core.Response;
+import javax.ws.rs.core.UriInfo;
 
+import org.gaurav.rest.RestMessenger.database.MessageFilterBean;
+import org.gaurav.rest.RestMessenger.model.Link;
 import org.gaurav.rest.RestMessenger.model.Message;
 import org.gaurav.rest.RestMessenger.service.MessageService;
 
 @Path("/messages")
 @Produces(MediaType.APPLICATION_JSON)
+//@Produces(value={MediaType.APPLICATION_JSON, MediaType.TEXT_XML})
 @Consumes(MediaType.APPLICATION_JSON)
 public class MessageResource {
 	
 	MessageService messageService = new MessageService();
 	
 	@GET
-	public List<Message> getMessages(@QueryParam("year") int year, 
-										@QueryParam("year") int start, 
-											@QueryParam("year") int size){
-		if( year > 0 ){
-			return messageService.getAllMessagesForYear(year);
+	@Produces(MediaType.APPLICATION_JSON)
+	public List<Message> getJsonMessages(@BeanParam MessageFilterBean filterBean){
+		System.out.println("JSON Method Called");
+		if( filterBean.getYear() > 0 ){
+			return messageService.getAllMessagesForYear(filterBean.getYear());
 		}
-		if( start >= 0 && size > 0 ){
-			return messageService.getAllMessagesPaginated(start, size);
+		if( filterBean.getStart() >= 0 && filterBean.getSize() > 0 ){
+			return messageService.getAllMessagesPaginated(filterBean.getStart(), filterBean.getSize());
 		}
 		return messageService.getAllMessages();
 	}
 	
-	@POST
+	@GET
+	@Produces(MediaType.TEXT_XML)
+	public List<Message> getXmlMessages(@BeanParam MessageFilterBean filterBean){
+		System.out.println("XML Method Called");
+		if( filterBean.getYear() > 0 ){
+			return messageService.getAllMessagesForYear(filterBean.getYear());
+		}
+		if( filterBean.getStart() >= 0 && filterBean.getSize() > 0 ){
+			return messageService.getAllMessagesPaginated(filterBean.getStart(), filterBean.getSize());
+		}
+		return messageService.getAllMessages();
+	}
+	
+	/*@POST
 	public Message addMessage(Message message){
 		return messageService.addMessage(message);
+	}*/
+	
+	@POST
+	public Response addMessage(Message message, @Context UriInfo uriInfo){
+		Message newMessage = messageService.addMessage(message);
+		/*return Response.status(Status.CREATED)
+			.entity(newMessage)
+			.build();*/
+		/*return Response.created(new URI("/RestMessenger/webapi/messages/"+newMessage.getId()))
+				.entity(newMessage)
+				.build();*/
+		String newId = String.valueOf(newMessage.getId());
+		URI newURI = uriInfo.getAbsolutePathBuilder().path(newId).build();
+		return Response.created(newURI)
+				.entity(newMessage)
+				.build();
 	}
 	
 	
@@ -51,14 +87,52 @@ public class MessageResource {
 	
 	@GET
 	@Path("/{messageId}")
-	public Message getMessage(@PathParam("messageId") long messageId){
-		return messageService.getMessage(messageId);
+	public Message getMessage(@PathParam("messageId") long messageId, @Context UriInfo uriInfo){
+		Message message = messageService.getMessage(messageId);
+		message.addLink(getUriForSelf(uriInfo, message), "self");
+		message.addLink(getUriForProfile(uriInfo, message), "profile");
+		message.addLink(getUriForComments(uriInfo, message), "comments");
+		return message;
+	}
+
+	private String getUriForComments(UriInfo uriInfo, Message message) {
+		String uri = uriInfo.getBaseUriBuilder()
+				.path(MessageResource.class)
+				.path(MessageResource.class, "getCommentResource")
+				.path(CommentResource.class)
+				.resolveTemplate("messageId", message.getId())
+				.build()
+				.toString();
+			return uri;
+	}
+
+	private String getUriForProfile(UriInfo uriInfo, Message message) {
+		String uri = uriInfo.getBaseUriBuilder()
+			.path(ProfileResource.class)
+			.path(message.getAuthor())
+			.build()
+			.toString();
+		return uri;
+	}
+	
+	private String getUriForSelf(UriInfo uriInfo, Message message) {
+		String uri = uriInfo.getBaseUriBuilder()
+			.path(MessageResource.class)
+			.path(Long.toString(message.getId()))
+			.build()
+			.toString();
+		return uri;
 	}
 	
 	@DELETE
 	@Path("/{messageId}")
 	public void deleteMessage(@PathParam("messageId") long messageId){
 		messageService.removeMessage(messageId);
+	}
+	
+	@Path("/{messageId}/comments")
+	public CommentResource getCommentResource(){
+		return new CommentResource();
 	}
 	
 }
